@@ -1,4 +1,5 @@
 Dự án này triển khai và so sánh hiệu suất của 4 thuật toán khác nhau để giải bài toán Traveling Salesman Problem (TSP): Tìm đường đi ngắn nhất đi qua tất cả các thành phố và quay trở lại điểm xuất phát.
+
 Các thuật toán triển khai:
     1. Branch and Bound (B&B - Nhánh và Cận)
         + Loại: Thuật toán chính xác (Exact Algorithm).
