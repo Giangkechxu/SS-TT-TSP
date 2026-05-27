@@ -1,0 +1,150 @@
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+class ACO:
+    def __init__(self, cities,
+                 n_ants=0,
+                 n_iterations=0,
+                 alpha=0.0,
+                 beta=0.0,
+                 evaporation_rate=0.0,
+                 Q=0.0):
+
+        self.cities = cities
+        self.n = len(cities)
+
+        self.n_ants = n_ants
+        self.n_iterations = n_iterations
+
+        self.alpha = alpha
+        self.beta = beta
+
+        self.rho = evaporation_rate
+        self.Q = Q
+
+        self.pheromone = np.ones((self.n, self.n))
+
+        self.best_path = None
+        self.best_cost = float('inf')
+
+    # ----------------------------
+    def _dist(self, i, j):
+        return self.cities[i].distance(self.cities[j])
+
+    # ----------------------------
+    # Xây lộ trình cho một kiến
+    # Trả về path gồm n node, KHÔNG lặp node đầu
+    # ----------------------------
+    def _build_route(self, start):
+        visited = {start}
+        path = [start]
+        cost = 0
+
+        while len(visited) < self.n:
+            current = path[-1]
+            unvisited = [j for j in range(self.n) if j not in visited]
+
+            # Tính xác suất cho từng node chưa thăm
+            probs = []
+            for j in unvisited:
+                dist = max(self._dist(current, j), 1e-9)
+                tau = self.pheromone[current][j] ** self.alpha
+                eta = (1.0 / dist) ** self.beta
+                probs.append(tau * eta)
+
+            # Chuẩn hóa xác suất
+            probs = np.array(probs)
+            if probs.sum() == 0:
+                probs = np.ones(len(unvisited)) / len(unvisited)
+            else:
+                probs /= probs.sum()
+
+            # Chọn node tiếp theo theo xác suất
+            nxt = np.random.choice(unvisited, p=probs)
+
+            cost += self._dist(current, nxt)
+            path.append(nxt)
+            visited.add(nxt)
+
+        # Cộng cạnh quay về điểm xuất phát
+        # KHÔNG append vào path — path luôn có đúng n node
+        cost += self._dist(path[-1], path[0])
+
+        return path, cost
+
+    # ----------------------------
+    # Chạy ACO
+    # ----------------------------
+    def run(self, output_dir=None):
+
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+
+        for _ in range(self.n_iterations):
+
+            all_paths = []
+            all_costs = []
+
+            # --------------------
+            # Bước 1: Tất cả kiến xây lộ trình
+            # --------------------
+            for k in range(self.n_ants):
+                start = k % self.n
+                path, cost = self._build_route(start)
+
+                all_paths.append(path)
+                all_costs.append(cost)
+
+            # --------------------
+            # Bước 2: Cập nhật best SAU khi tất cả kiến xong
+            # --------------------
+            best_idx = int(np.argmin(all_costs))
+            if all_costs[best_idx] < self.best_cost:
+                self.best_cost = all_costs[best_idx]
+                self.best_path = all_paths[best_idx]
+
+            # --------------------
+            # Bước 3: Bay hơi pheromone
+            # --------------------
+            self.pheromone *= (1 - self.rho)
+
+            # --------------------
+            # Bước 4: Deposit pheromone
+            # Duyệt n cạnh: 0→1, 1→2, ..., n-2→n-1, n-1→0
+            # --------------------
+            for path, cost in zip(all_paths, all_costs):
+                deposit = self.Q / cost
+                for i in range(self.n):
+                    a = path[i]
+                    b = path[(i + 1) % self.n]  # cạnh cuối → đầu nhờ % n
+                    self.pheromone[a][b] += deposit
+                    self.pheromone[b][a] += deposit
+
+        # --------------------
+        # Lưu kết quả
+        # --------------------
+        if output_dir and self.best_path:
+            self._save_final(output_dir)
+
+        return (
+            [self.cities[i] for i in self.best_path],
+            self.best_cost
+        )
+
+    # ----------------------------
+    def _save_final(self, output_dir):
+        plt.figure(figsize=(7, 5))
+
+        x = [self.cities[i].x for i in self.best_path]
+        y = [self.cities[i].y for i in self.best_path]
+
+        x.append(x[0])
+        y.append(y[0])
+
+        plt.plot(x, y, 'o-', color='blue')
+        plt.title(f"Best ACO route | cost = {self.best_cost:.4f}")
+
+        plt.savefig(f"{output_dir}/ACO_final.png")
+        plt.close()
